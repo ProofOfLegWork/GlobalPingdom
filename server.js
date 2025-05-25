@@ -123,7 +123,14 @@ async function runGlobalMonitoring() {
   return results;
 }
 
-// Calculate summary statistics
+// Calculate percentiles
+function calculatePercentile(values, percentile) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+  return sorted[index];
+}
+
+// Enhanced summary statistics
 function calculateSummaryStats(results) {
   const successful = results.filter(r => r.success);
   const failed = results.filter(r => !r.success);
@@ -133,17 +140,29 @@ function calculateSummaryStats(results) {
     ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
     : 0;
   
-  const minResponseTime = responseTimes.length > 0 ? Math.min(...responseTimes) : 0;
-  const maxResponseTime = responseTimes.length > 0 ? Math.max(...responseTimes) : 0;
+  // Calculate percentiles
+  const p95 = responseTimes.length > 0 ? calculatePercentile(responseTimes, 95) : 0;
+  const p99 = responseTimes.length > 0 ? calculatePercentile(responseTimes, 99) : 0;
+  const median = responseTimes.length > 0 ? calculatePercentile(responseTimes, 50) : 0;
   
   return {
     totalTests: results.length,
     successful: successful.length,
     failed: failed.length,
     uptime: (successful.length / results.length) * 100,
-    avgResponseTime: Math.round(avgResponseTime),
-    minResponseTime,
-    maxResponseTime,
+    responseTime: {
+      avg: Math.round(avgResponseTime),
+      median: Math.round(median),
+      p95: Math.round(p95),
+      p99: Math.round(p99),
+      min: responseTimes.length > 0 ? Math.min(...responseTimes) : 0,
+      max: responseTimes.length > 0 ? Math.max(...responseTimes) : 0
+    },
+    outages: failed.map(f => ({
+      location: f.location,
+      timestamp: f.timestamp,
+      error: f.error
+    })),
     timestamp: new Date().toISOString()
   };
 }
@@ -205,13 +224,20 @@ io.on('connection', (socket) => {
   });
 });
 
-// Schedule monitoring every 5 minutes
-cron.schedule('*/5 * * * *', runGlobalMonitoring);
+// Update monitoring schedule to use environment variable
+const monitoringInterval = process.env.MONITORING_INTERVAL || 300000; // default 5 minutes
+if (monitoringInterval === '3600000') {
+  // If hourly, use cron
+  cron.schedule('0 * * * *', runGlobalMonitoring);
+} else {
+  // Otherwise use interval
+  setInterval(runGlobalMonitoring, parseInt(monitoringInterval));
+}
 
 // Run initial monitoring on startup
 setTimeout(runGlobalMonitoring, 5000);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5511;
 server.listen(PORT, () => {
   console.log(`Global Ping Monitor server running on port ${PORT}`);
   console.log(`Monitoring: ${TARGET_URL}`);

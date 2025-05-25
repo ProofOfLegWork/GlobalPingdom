@@ -140,7 +140,7 @@ class Database {
       });
     });
   }
-
+  //WIll work once the global solution exists
   async getSummaryStats(hours = 24) {
     return new Promise((resolve, reject) => {
       const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();

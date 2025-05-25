@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  monitor:
+    build: .
+    ports:
+      - "5511:5511"
+    volumes:
+      - ./monitoring.db:/app/monitoring.db
+    environment:
+      - NODE_ENV=production
+      - MONITORING_INTERVAL=3600000  # 1 hour in milliseconds
+    restart: always 
